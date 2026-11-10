@@ -1,0 +1,60 @@
+name: Publish fork image
+
+# Manual-only publish of the fork image to GHCR.
+# The image is built locally, scanned with Trivy, and pushed
+# only if the scan reports zero vulnerabilities.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag (defaults to the current release)'
+        default: '2.18.2'
+        required: true
+
+env:
+  IMAGE: ghcr.io/philippdormann/wakapi
+
+jobs:
+  build-scan-push:
+    name: 'Build, scan, push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image (local, no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          push: false
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE }}:${{ inputs.tag }}
+
+      - name: Trivy gate (zero CVEs or fail)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ inputs.tag }}
+          format: table
+          scanners: vuln
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        run: docker push ${{ env.IMAGE }}:${{ inputs.tag }}
