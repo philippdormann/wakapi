@@ -27,6 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -56,5 +59,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image
-        run: docker push ${{ env.IMAGE }}:${{ inputs.tag }}
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64/v8
+          tags: ${{ env.IMAGE }}:${{ inputs.tag }}
